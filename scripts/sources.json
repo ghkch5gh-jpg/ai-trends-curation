@@ -1,0 +1,87 @@
+[
+  {
+    "name": "GitHub Trending (daily, all)",
+    "url": "https://github.com/trending?since=daily",
+    "kind": "html"
+  },
+  {
+    "name": "GitHub Trending (weekly, all)",
+    "url": "https://github.com/trending?since=weekly",
+    "kind": "html"
+  },
+  {
+    "name": "GitHub Trending Python (daily)",
+    "url": "https://github.com/trending/python?since=daily",
+    "kind": "html"
+  },
+  {
+    "name": "GitHub Trending TypeScript (daily)",
+    "url": "https://github.com/trending/typescript?since=daily",
+    "kind": "html"
+  },
+  {
+    "name": "GitHub Trending Rust (weekly)",
+    "url": "https://github.com/trending/rust?since=weekly",
+    "kind": "html"
+  },
+  {
+    "name": "GitHub Search API (AI/LLM/agent, recent + popular)",
+    "url": "https://api.github.com/search/repositories?q=(LLM+OR+agent+OR+%22language+model%22+OR+RAG+OR+diffusion+OR+%22AI%22)+stars:>80+pushed:>__SINCE__&sort=stars&order=desc&per_page=25",
+    "kind": "json-search"
+  },
+  {
+    "name": "HuggingFace trending models",
+    "url": "https://huggingface.co/models?sort=trending",
+    "kind": "html"
+  },
+  {
+    "name": "HuggingFace trending datasets",
+    "url": "https://huggingface.co/datasets?sort=trending",
+    "kind": "html"
+  },
+  {
+    "name": "arXiv cs.AI new",
+    "url": "https://arxiv.org/list/cs.AI/new",
+    "kind": "html"
+  },
+  {
+    "name": "arXiv cs.LG new",
+    "url": "https://arxiv.org/list/cs.LG/new",
+    "kind": "html"
+  },
+  {
+    "name": "arXiv cs.CL new",
+    "url": "https://arxiv.org/list/cs.CL/new",
+    "kind": "html"
+  },
+  {
+    "name": "Hacker News front page (top)",
+    "url": "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=30",
+    "kind": "json"
+  },
+  {
+    "name": "Hacker News AI/LLM stories (24h, points>50)",
+    "url": "https://hn.algolia.com/api/v1/search?query=(AI+OR+LLM+OR+%22language+model%22+OR+agent+OR+GPT+OR+Claude+OR+model)&tags=story&numericFilters=points>50,created_at_i>__SINCE_TS__&hitsPerPage=30",
+    "kind": "json"
+  },
+  {
+    "name": "Reddit r/LocalLLaMA top day",
+    "url": "https://www.reddit.com/r/LocalLLaMA/top.json?t=day&limit=25",
+    "kind": "json"
+  },
+  {
+    "name": "Reddit r/MachineLearning top week",
+    "url": "https://www.reddit.com/r/MachineLearning/top.json?t=week&limit=25",
+    "kind": "json"
+  },
+  {
+    "name": "Reddit r/artificial top day",
+    "url": "https://www.reddit.com/r/artificial/top.json?t=day&limit=25",
+    "kind": "json"
+  },
+  {
+    "name": "Reddit r/programming top day",
+    "url": "https://www.reddit.com/r/programming/top.json?t=day&limit=25",
+    "kind": "json"
+  }
+]
