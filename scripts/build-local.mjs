@@ -114,12 +114,50 @@ function jsonExtractFromReddit(json) {
     .join("\n");
 }
 
+// RSS/Atom 공통 파서 (블로그 RSS, GitHub releases.atom)
+function parseFeed(xml, max = 12) {
+  const clean = (s) => String(s || "").replace(/<!\[CDATA\[|\]\]>/g, "").replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
+  const blocks = xml.split(/<entry[\s>]|<item[\s>]/i).slice(1, max + 1);
+  return blocks
+    .map((b) => {
+      const title = clean((b.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]);
+      let link = (b.match(/<link[^>]*href=["']([^"']+)["']/i) || [])[1];
+      if (!link) link = clean((b.match(/<link[^>]*>([\s\S]*?)<\/link>/i) || [])[1]);
+      const date = ((b.match(/<(updated|pubDate|published|dc:date)[^>]*>([\s\S]*?)<\/\1>/i) || [])[2] || "").slice(0, 10);
+      if (!title) return "";
+      return `- ${title} (${(link || "").trim()})${date ? ` · ${date}` : ""}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
 async function fetchSource(s) {
-  let url = s.url.replaceAll("__SINCE__", sinceIso).replaceAll("__SINCE_TS__", String(sinceTs));
-  const headers = {};
-  if (GITHUB_TOKEN && /api\.github\.com/.test(url)) headers.Authorization = `Bearer ${GITHUB_TOKEN}`;
   try {
+    // url 없이 repos 목록을 도는 종류 — 각 레포의 releases.atom
+    if (s.kind === "github-releases") {
+      const parts = await Promise.all(
+        (s.repos || []).map(async (repo) => {
+          try {
+            const res = await fetchWithRetry(`https://github.com/${repo}/releases.atom`);
+            const feed = parseFeed(await res.text(), 3);
+            return feed ? `[${repo}]\n${feed}` : "";
+          } catch {
+            return "";
+          }
+        })
+      );
+      const text = parts.filter(Boolean).join("\n");
+      return { ...s, text: text.slice(0, 8000), ok: !!text };
+    }
+
+    let url = s.url.replaceAll("__SINCE__", sinceIso).replaceAll("__SINCE_TS__", String(sinceTs));
+    const headers = {};
+    if (GITHUB_TOKEN && /api\.github\.com/.test(url)) headers.Authorization = `Bearer ${GITHUB_TOKEN}`;
+    // Reddit는 'Bot' UA를 403 처리 — Reddit API 가이드 형식 UA로 교체
+    if (/reddit\.com/.test(url)) headers["User-Agent"] = "web:dangsun-ai-trends:1.0 (by /u/ghkch5gh-jpg)";
+
     const res = await fetchWithRetry(url, { headers });
+    if (s.kind === "rss") return { ...s, text: parseFeed(await res.text(), 12).slice(0, 8000), ok: true };
     if (s.kind === "html") return { ...s, text: stripHtml(await res.text(), url).slice(0, 8000), ok: true };
     if (s.kind === "json-search") return { ...s, text: jsonExtractFromGithubSearch(await res.json()), ok: true };
     if (s.kind === "json") {
@@ -187,7 +225,7 @@ ${[...priorUrls].slice(0, 50).map((u) => `- ${u}`).join("\n") || "(없음)"}
   "edition_note": "오늘 호 한 줄 소개 (~90자) — 무엇이 화제였는지",
   "items": [
     {
-      "section": "headline | release | repo | paper | tool | community",
+      "section": "headline | release | repo | gov | paper | tool | community",
       "title": "한국어 제목, 간결하고 구체적으로",
       "url": "원본 링크 (수집된 것 중에서만)",
       "source": "출처태그: hn | github | huggingface | arxiv | reddit | blog",
@@ -204,7 +242,7 @@ ${[...priorUrls].slice(0, 50).map((u) => `- ${u}`).join("\n") || "(없음)"}
 
 분량·분류 규칙:
 - section "headline": **가장 중요한 4~6개** (출처 무관, 오늘의 톱). 나머지 섹션과 중복 게재 금지.
-- "release"(릴리스·신모델) "repo"(핫 레포) "paper"(주목할 페이퍼) "tool"(개발 툴) "community"(커뮤니티 반응): 각각 **2~5개**. 해당 없으면 비워도 됨.
+- "release"(릴리스·신모델): GitHub 릴리스/모델 출시(버전 업)일 때. "repo"(핫 레포): 새로 뜬 저장소. "gov"(정부 지원사업): **기업마당 피드의 실제 공고 중 AI·IT·SW·스타트업 관련만**. 농업·제조 등 무관 공고·랜딩페이지 generic 금지. 관련 공고 없으면 이 섹션 비울 것. "paper"(주목할 페이퍼): arXiv. "tool"(개발 툴). "community"(커뮤니티 반응): HN/Reddit 담론. 각각 **2~5개**, 해당 소스 없으면 비워도 됨 (지어내기 금지).
 - 전체 16~26개. 수집 안 된 내용 지어내지 말 것. URL은 반드시 위 소스에 등장한 것.`;
 
 console.log(`Prompt: ${(Buffer.byteLength(prompt, "utf8") / 1024).toFixed(1)} KB`);
@@ -240,6 +278,7 @@ const SECTIONS = [
   ["headline", "오늘의 헤드라인"],
   ["release", "릴리스 · 신모델"],
   ["repo", "핫 레포"],
+  ["gov", "정부 지원사업"],
   ["paper", "주목할 페이퍼"],
   ["tool", "개발 툴"],
   ["community", "커뮤니티 반응"],

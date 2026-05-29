@@ -20,14 +20,30 @@
     "kind": "html"
   },
   {
-    "name": "GitHub Trending Rust (weekly)",
-    "url": "https://github.com/trending/rust?since=weekly",
-    "kind": "html"
-  },
-  {
     "name": "GitHub Search API (AI/LLM/agent, recent + popular)",
     "url": "https://api.github.com/search/repositories?q=(LLM+OR+agent+OR+%22language+model%22+OR+RAG+OR+diffusion+OR+%22AI%22)+stars:>80+pushed:>__SINCE__&sort=stars&order=desc&per_page=25",
     "kind": "json-search"
+  },
+  {
+    "name": "GitHub Releases (major AI/dev repos)",
+    "kind": "github-releases",
+    "repos": [
+      "langchain-ai/langgraph",
+      "langchain-ai/langchain",
+      "vllm-project/vllm",
+      "huggingface/transformers",
+      "ggml-org/llama.cpp",
+      "ollama/ollama",
+      "comfyanonymous/ComfyUI",
+      "sgl-project/sglang",
+      "run-llama/llama_index",
+      "pydantic/pydantic-ai",
+      "openai/openai-python",
+      "anthropics/anthropic-sdk-python",
+      "microsoft/autogen",
+      "crewAIInc/crewAI",
+      "BerriAI/litellm"
+    ]
   },
   {
     "name": "HuggingFace trending models",
@@ -38,6 +54,26 @@
     "name": "HuggingFace trending datasets",
     "url": "https://huggingface.co/datasets?sort=trending",
     "kind": "html"
+  },
+  {
+    "name": "HuggingFace Blog (RSS)",
+    "url": "https://huggingface.co/blog/feed.xml",
+    "kind": "rss"
+  },
+  {
+    "name": "Simon Willison Blog (RSS)",
+    "url": "https://simonwillison.net/atom/everything/",
+    "kind": "rss"
+  },
+  {
+    "name": "Google AI Blog (RSS)",
+    "url": "https://blog.google/technology/ai/rss/",
+    "kind": "rss"
+  },
+  {
+    "name": "OpenAI News (RSS)",
+    "url": "https://openai.com/news/rss.xml",
+    "kind": "rss"
   },
   {
     "name": "arXiv cs.AI new",
@@ -83,5 +119,11 @@
     "name": "Reddit r/programming top day",
     "url": "https://www.reddit.com/r/programming/top.json?t=day&limit=25",
     "kind": "json"
+  },
+  {
+    "name": "기업마당 정부지원사업 공고 (bizinfo RSS)",
+    "url": "https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do?dataType=rss",
+    "kind": "rss",
+    "gov": true
   }
 ]
