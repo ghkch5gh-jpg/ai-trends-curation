@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-// 로컬 생성기 — 수집 → claude -p (정액제) → 회차 .md 작성 → index.md 갱신.
-// GitHub Actions(유료 API)가 아니라 PC에서 Claude Code 구독으로 돈다.
-//   DRY_RUN=1  : 수집 + 프롬프트만 출력하고 claude 호출 안 함
-//   CLAUDE_MODEL=opus : 모델 변경 (기본 sonnet)
+// 로컬 생성기 — 수집 → claude -p (정액제) → 회차 .md(시맨틱 HTML) → index.md.
+// 레이아웃·말투는 baeksang.dev/daily 식: 주제 섹션 + 항목마다 얻는 것/지금 할 일/왜 지금/점수/출처.
+//   DRY_RUN=1 : 수집+프롬프트만   FORCE=1 : 오늘 회차 강제 재생성   CLAUDE_MODEL=opus
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 
@@ -22,7 +21,6 @@ const dateStr = kst.toISOString().slice(0, 10);
 const dayOfWeek = ["일", "월", "화", "수", "목", "금", "토"][kst.getUTCDay()];
 const slug = `${dateStr}_${dayOfWeek}`;
 
-// 오늘 회차가 이미 있으면 멱등 종료 (스케줄러 중복 실행 방지)
 const existing = (await readdir(".")).filter((f) => f === `${slug}.md`);
 if (existing.length && process.env.FORCE !== "1") {
   console.log(`${slug}.md 이미 존재 — 종료 (FORCE=1로 강제 재생성)`);
@@ -45,9 +43,7 @@ async function fetchWithRetry(url, { headers = {}, attempts = 3, baseDelayMs = 8
       lastErr = err;
       if (/HTTP (401|403|404)/.test(err.message)) throw err;
       if (i < attempts - 1) {
-        const delay = baseDelayMs * Math.pow(2, i);
-        console.warn(`fetch 재시도 ${i + 1} (${delay}ms): ${url} — ${err.message}`);
-        await new Promise((r) => setTimeout(r, delay));
+        await new Promise((r) => setTimeout(r, baseDelayMs * Math.pow(2, i)));
       }
     }
   }
@@ -92,353 +88,257 @@ function stripHtml(html, baseUrl) {
 }
 
 function jsonExtractFromGithubSearch(json) {
-  const items = json.items || [];
-  return items
+  return (json.items || [])
     .map((r) => {
-      const star = r.stargazers_count || 0;
-      const pushed = (r.pushed_at || "").slice(0, 10);
-      const desc = (r.description || "").replace(/\s+/g, " ").trim();
-      const lang = r.language || "";
       const topics = (r.topics || []).slice(0, 5).join(",");
-      return `- ${r.full_name} (${r.html_url}) — ${star}⭐ · pushed ${pushed} · ${lang} · topics: ${topics} · ${desc}`;
+      return `- ${r.full_name} (${r.html_url}) — ${r.stargazers_count || 0}⭐ · pushed ${(r.pushed_at || "").slice(0, 10)} · ${r.language || ""} · topics: ${topics} · ${(r.description || "").replace(/\s+/g, " ").trim()}`;
     })
     .join("\n");
 }
-
 function jsonExtractFromHN(json) {
-  const hits = json.hits || [];
-  return hits
+  return (json.hits || [])
     .map((h) => {
       const url = h.url || `https://news.ycombinator.com/item?id=${h.objectID}`;
       return `- "${h.title || "(no title)"}" (${url}) — ${h.points || 0} pts · ${h.num_comments || 0} comments`;
     })
     .join("\n");
 }
-
 function jsonExtractFromReddit(json) {
-  const children = json?.data?.children || [];
-  return children
+  return (json?.data?.children || [])
     .map((c) => {
       const d = c.data || {};
       const externalUrl = d.url_overridden_by_dest || d.url || "";
-      const ghMatch = /github\.com\/[\w.-]+\/[\w.-]+|huggingface\.co\/[\w/.-]+|arxiv\.org/.test(
-        externalUrl + " " + (d.selftext || "")
-      );
-      const tag = ghMatch ? "[has-code-link]" : "";
-      return `- "${d.title}" (https://reddit.com${d.permalink}) — ${d.score} pts · external: ${externalUrl} ${tag}`;
+      const code = /github\.com\/[\w.-]+\/[\w.-]+|huggingface\.co\/[\w/.-]+|arxiv\.org/.test(externalUrl + " " + (d.selftext || "")) ? "[has-code-link]" : "";
+      return `- "${d.title}" (https://reddit.com${d.permalink}) — ${d.score} pts · external: ${externalUrl} ${code}`;
     })
     .join("\n");
 }
 
 async function fetchSource(s) {
-  let url = s.url
-    .replaceAll("__SINCE__", sinceIso)
-    .replaceAll("__SINCE_TS__", String(sinceTs));
-
+  let url = s.url.replaceAll("__SINCE__", sinceIso).replaceAll("__SINCE_TS__", String(sinceTs));
   const headers = {};
-  if (GITHUB_TOKEN && /api\.github\.com/.test(url)) {
-    headers.Authorization = `Bearer ${GITHUB_TOKEN}`;
-  }
-
+  if (GITHUB_TOKEN && /api\.github\.com/.test(url)) headers.Authorization = `Bearer ${GITHUB_TOKEN}`;
   try {
     const res = await fetchWithRetry(url, { headers });
-    if (s.kind === "html") {
-      const html = await res.text();
-      return { ...s, text: stripHtml(html, url).slice(0, 8000), ok: true };
-    }
-    if (s.kind === "json-search") {
-      const json = await res.json();
-      return { ...s, text: jsonExtractFromGithubSearch(json), ok: true };
-    }
+    if (s.kind === "html") return { ...s, text: stripHtml(await res.text(), url).slice(0, 8000), ok: true };
+    if (s.kind === "json-search") return { ...s, text: jsonExtractFromGithubSearch(await res.json()), ok: true };
     if (s.kind === "json") {
       const json = await res.json();
-      const isHN = /algolia/.test(url);
-      const isReddit = /reddit\.com/.test(url);
-      const text = isHN
-        ? jsonExtractFromHN(json)
-        : isReddit
-        ? jsonExtractFromReddit(json)
-        : JSON.stringify(json).slice(0, 4000);
+      const text = /algolia/.test(url) ? jsonExtractFromHN(json) : /reddit\.com/.test(url) ? jsonExtractFromReddit(json) : JSON.stringify(json).slice(0, 4000);
       return { ...s, text: text.slice(0, 8000), ok: true };
     }
-    return { ...s, text: "", ok: false, error: `unknown kind: ${s.kind}` };
+    return { ...s, text: "", ok: false };
   } catch (err) {
     console.warn(`수집 실패 ${s.name}: ${err.message}`);
-    return { ...s, text: "", ok: false, error: String(err) };
+    return { ...s, text: "", ok: false };
   }
 }
 
-console.log(`소스 ${sources.length}개 fetch 시작 (병렬)...`);
+console.log(`소스 ${sources.length}개 fetch 시작...`);
 const fetched = await Promise.all(sources.map(fetchSource));
 const okSources = fetched.filter((f) => f.ok && f.text);
 console.log(`성공: ${okSources.length}/${sources.length}`);
-
 if (okSources.length === 0) {
   console.error("모든 소스 fetch 실패");
   process.exit(1);
 }
 
-// 직전 2회차 URL/제목 (중복 회피용)
-const allMd = (await readdir(".")).filter(
-  (f) => /^\d{4}-\d{2}-\d{2}.*\.md$/.test(f) && f !== `${slug}.md`
-);
+const allMd = (await readdir(".")).filter((f) => /^\d{4}-\d{2}-\d{2}.*\.md$/.test(f) && f !== `${slug}.md`);
 const priorFiles = allMd.sort().reverse().slice(0, 2);
 const priorUrls = new Set();
 for (const f of priorFiles) {
-  const content = await readFile(f, "utf8");
-  for (const m of content.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g)) {
-    priorUrls.add(m[2]);
-  }
+  for (const m of (await readFile(f, "utf8")).matchAll(/href="(https?:\/\/[^"]+)"/g)) priorUrls.add(m[1]);
 }
-console.log(`이전 ${priorFiles.length}회차에서 URL ${priorUrls.size}개 추출`);
 
 const SPEC = await readFile("CURATION_SPEC.md", "utf8");
 
-const prompt = `**중요 사전 지시 — 이 요청은 *채팅 응답* 형식입니다. 작업 요청이 아닙니다.**
-- 어떤 도구·외부 검색·파일시스템도 사용 금지. (이미 모든 자료는 아래에 제공됨)
-- 파일을 만들거나 디스크에 저장하지 마세요.
-- 응답은 *한 덩어리 JSON*만. 인사·"완성했습니다"·"파일 경로:" 같은 보고문 절대 금지.
-- 첫 글자부터 \`{\` 로 시작.
+const prompt = `**중요 — 이 요청은 *채팅 응답* 형식입니다. 도구·검색·파일시스템 사용 금지. 응답은 한 덩어리 JSON만. 첫 글자부터 \`{\` 로 시작. 인사·보고문 금지.**
 
-당신은 한국 개발자를 위한 **AI·개발 트렌드 큐레이터**입니다. 오늘(${dateStr}, ${dayOfWeek}요일) 회차를 작성하세요.
+당신은 한국 개발자를 위한 **AI·개발 데일리 큐레이터**입니다. 오늘(${dateStr}, ${dayOfWeek}요일) 회차를 작성하세요.
 
-# 핵심 명세 (필독)
-
+# 명세
 ${SPEC}
 
-# 수집된 소스 텍스트 (오늘 ${okSources.length}개 소스에서 fetch 됨)
+# 말투 (이 톤을 그대로 따라하세요 — 실제 레퍼런스 2개)
 
-${okSources.map((f) => `### ${f.name} (${f.url})\n${f.text}`).join("\n\n---\n\n")}
+[예시 A — 릴리스]
+본문: "LangGraph 1.2.0이 정식 출시됐어요. 가장 큰 변화는 durable error-handler로, 호스트가 죽어도 에이전트 실행 상태를 복구할 수 있게 됐습니다."
+얻는 것: "호스트가 죽어도 에이전트 상태가 날아가지 않아요. set_node_defaults()로 반복 설정을 줄일 수 있습니다."
+지금 할 일: "pip install langgraph==1.2.0 으로 업그레이드하고, durable error-handler 문서를 확인해보세요."
+왜 지금: "AI 에이전트가 복잡해지면서 서버 장애 시 상태 복구는 필수 기능이 되고 있어요."
 
-# 이전 2회차에 다룬 URL (중복 게재 금지 — 단, 의미 있는 신규 릴리스면 "[업데이트]" 라벨로 OK)
+[예시 B — 커뮤니티]
+본문: "Hacker News에서 1,800점 이상을 받은 글에 따르면, 많은 개발자들이 AI와의 대화에 피로감을 느끼고 있습니다."
+얻는 것: "AI 상호작용의 피로감을 이해하고, 더 나은 정보 탐색 방식을 고민할 수 있습니다."
+지금 할 일: "AI에게 질문하기 전, 직접 검색하거나 동료에게 물어보는 것을 먼저 시도해보세요."
+왜 지금: "AI가 발전할수록 오히려 인간적인 소통과 깊이 있는 정보의 가치가 재조명받고 있습니다."
 
-${[...priorUrls].slice(0, 60).map((u) => `- ${u}`).join("\n") || "(없음 — 첫 회차)"}
+→ 해요체/합니다체 섞어 간결하게. 과장·영업체 금지. '얻는 것'은 독자 이득, '지금 할 일'은 즉시 실행 가능한 구체 행동(가능하면 명령어), '왜 지금'은 타이밍·의미.
 
-# 출력 규칙
+# 수집된 소스 (${okSources.length}개)
+${okSources.map((f) => `### ${f.name}\n${f.text}`).join("\n\n---\n\n")}
 
-**첫 글자부터** 아래 JSON 스키마로만 답하세요. 서론·"분석하겠습니다" 류 절대 금지.
+# 직전 회차 URL (중복 금지)
+${[...priorUrls].slice(0, 50).map((u) => `- ${u}`).join("\n") || "(없음)"}
 
+# 출력 스키마 (이대로만)
 \`\`\`
 {
-  "description": "이 회차 요약 한 문장 (~100자) — frontmatter description에 들어감",
-  "flow_summary": "이번 회차 흐름 2~3문단 (~300자)",
-  "trending_picks": [
+  "edition_note": "오늘 호 한 줄 소개 (~90자) — 무엇이 화제였는지",
+  "items": [
     {
-      "name": "owner/repo 또는 도구/모델명",
-      "url": "https://...",
-      "meta": "GitHub Trending | XXk ⭐ | +XX 오늘 등 한 줄",
-      "what": "이게 뭐 하는 건지 한 문장 (아는 것에 빗대)",
-      "note": "한 줄 코멘트 — 솔직하게 (핫하지만 실속 여부 등)"
+      "section": "headline | release | repo | paper | tool | community",
+      "title": "한국어 제목, 간결하고 구체적으로",
+      "url": "원본 링크 (수집된 것 중에서만)",
+      "source": "출처태그: hn | github | huggingface | arxiv | reddit | blog",
+      "score": 1-10 정수 (실무 임팩트),
+      "body": "본문 2~4문장 — 무슨 일이고 핵심이 뭔지",
+      "points": ["핵심 요점 1", "2", "3"],
+      "gain": "얻는 것 — 독자가 뭘 얻는지 1~2문장",
+      "todo": "지금 할 일 — 즉시 행동/명령 (예: pip install …, git clone …)",
+      "why_now": "왜 지금 — 타이밍·의미 1~2문장"
     }
-  ],
-  "core_picks": [
-    {
-      "name": "owner/repo",
-      "url": "https://...",
-      "meta": "★★★ | GitHub | XXk ⭐ | 마지막 갱신",
-      "what": "친구가 1초 만에 이해하는 설명 (비유 포함)",
-      "why": ["구체적 시나리오 1", "구체적 시나리오 2", "시나리오 3 (선택)"],
-      "claude_use": "git clone 후 AI 코딩 도구에 시킬 자연어 지시 한 줄",
-      "why_now": "왜 오늘 다루는지 1줄"
-    }
-  ],
-  "sub_picks": [
-    {
-      "name": "owner/repo",
-      "url": "https://...",
-      "meta": "★★ | GitHub | XXk ⭐ | 마지막 갱신",
-      "what": "한 줄 설명 (비유 포함, CS/AI 약어 풀이)",
-      "claude_use": "→ \\\`git clone …\\\` · \\"자연어 지시\\""
-    }
-  ],
-  "memo": "큰 흐름 2~3줄 + 수집 한계 + 다음 회차 힌트. 자유 단락."
+  ]
 }
 \`\`\`
 
-분량 (명세 §4 절대 준수): trending_picks **정확히 5개**, core_picks **3~5개**, sub_picks **5~8개**.
-언어 규칙(명세 §4-1)을 셀프 체크 후 통과시켜서 작성하세요.`;
+분량·분류 규칙:
+- section "headline": **가장 중요한 4~6개** (출처 무관, 오늘의 톱). 나머지 섹션과 중복 게재 금지.
+- "release"(릴리스·신모델) "repo"(핫 레포) "paper"(주목할 페이퍼) "tool"(개발 툴) "community"(커뮤니티 반응): 각각 **2~5개**. 해당 없으면 비워도 됨.
+- 전체 16~26개. 수집 안 된 내용 지어내지 말 것. URL은 반드시 위 소스에 등장한 것.`;
 
-const promptBytes = Buffer.byteLength(prompt, "utf8");
-console.log(`Prompt 길이: ${prompt.length}자 (${(promptBytes / 1024).toFixed(1)} KB)`);
-
+console.log(`Prompt: ${(Buffer.byteLength(prompt, "utf8") / 1024).toFixed(1)} KB`);
 if (DRY_RUN) {
-  console.log("=== DRY RUN ===");
-  console.log(prompt.slice(0, 2500));
-  console.log(`...\n(전체 ${prompt.length}자)`);
+  console.log("=== DRY RUN ===\n" + prompt.slice(0, 2500) + `\n...(전체 ${prompt.length}자)`);
   process.exit(0);
 }
 
-// === claude -p 정액제 호출 (stdin으로 프롬프트 전달, 도구 전부 비활성) ===
 function callClaude(promptText) {
   return new Promise((resolve, reject) => {
     const args = ["-p", "--output-format", "text", "--allowedTools", "", "--model", CLAUDE_MODEL];
-    console.log(`claude ${args.join(" ")} 호출 (stdin ${promptText.length}자)...`);
+    console.log(`claude -p (${CLAUDE_MODEL}) 호출...`);
     const child = spawn("claude", args, { stdio: ["pipe", "pipe", "inherit"], shell: true });
     let out = "";
-    const timer = setTimeout(() => {
-      child.kill();
-      reject(new Error("claude 호출 타임아웃 (5분)"));
-    }, 5 * 60 * 1000);
+    const timer = setTimeout(() => { child.kill(); reject(new Error("타임아웃 5분")); }, 5 * 60 * 1000);
     child.stdout.on("data", (d) => (out += d.toString()));
-    child.on("error", (e) => {
-      clearTimeout(timer);
-      reject(e);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      code === 0 ? resolve(out) : reject(new Error(`claude exit ${code}`));
-    });
+    child.on("error", (e) => { clearTimeout(timer); reject(e); });
+    child.on("close", (code) => { clearTimeout(timer); code === 0 ? resolve(out) : reject(new Error(`claude exit ${code}`)); });
     child.stdin.write(promptText);
     child.stdin.end();
   });
 }
 
 const raw = await callClaude(prompt);
-const m = raw.match(/```json\s*([\s\S]*?)\s*```/) || raw.match(/\{[\s\S]*\}/);
-if (!m) {
-  console.error("JSON 블록 미발견. 원문 앞 600:", raw.slice(0, 600));
-  process.exit(1);
-}
-let resultJson;
-try {
-  resultJson = JSON.parse(m[1] ?? m[0]);
-} catch (e) {
-  console.error("JSON 파싱 실패:", e.message, "\n원문 앞 600:", raw.slice(0, 600));
-  process.exit(1);
-}
+const jm = raw.match(/```json\s*([\s\S]*?)\s*```/) || raw.match(/\{[\s\S]*\}/);
+if (!jm) { console.error("JSON 미발견:", raw.slice(0, 600)); process.exit(1); }
+let data;
+try { data = JSON.parse(jm[1] ?? jm[0]); } catch (e) { console.error("파싱 실패:", e.message, "\n", raw.slice(0, 600)); process.exit(1); }
 
-const heroDate = dateStr.replaceAll("-", " · ");
+// ===== 시맨틱 HTML 렌더 (baeksang 레이아웃) =====
+const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const SECTIONS = [
+  ["headline", "오늘의 헤드라인"],
+  ["release", "릴리스 · 신모델"],
+  ["repo", "핫 레포"],
+  ["paper", "주목할 페이퍼"],
+  ["tool", "개발 툴"],
+  ["community", "커뮤니티 반응"],
+];
+const SRC_LABEL = { hn: "Hacker News", github: "GitHub", huggingface: "HuggingFace", arxiv: "arXiv", reddit: "Reddit", blog: "Blog" };
+const isCmd = (s) => /(^\$|pip install|npm |npx |git clone|brew |docker|curl |uv |cargo |huggingface-cli|conda )/i.test(String(s || "").trim());
 
-function renderTrending(t, i) {
-  return `### ${i + 1}. [${t.name}](${t.url})
-${t.meta || ""}
-
-${t.what || ""}
-
-**코멘트:** ${t.note || ""}`;
-}
-
-function renderCore(c) {
-  const whyList = (c.why || []).map((w) => `- ${w}`).join("\n");
-  return `### [${c.name}](${c.url})
-${c.meta || ""}
-
-**한 줄로:** ${c.what || ""}
-
-**왜 의미 있냐:**
-${whyList}
-
-**AI 코딩 도구에 시키기:**
-\`\`\`
-git clone ${c.url}
-\`\`\`
-→ "${c.claude_use || ""}"
-
-**왜 오늘:** ${c.why_now || ""}`;
-}
-
-function renderSub(s) {
-  return `### [${s.name}](${s.url})
-${s.meta || ""}
-
-${s.what || ""}
-${s.claude_use || ""}`;
+const items = Array.isArray(data.items) ? data.items : [];
+let n = 0;
+function renderItem(it) {
+  n += 1;
+  const num = String(n).padStart(2, "0");
+  const todo = String(it.todo || "").trim();
+  const todoHtml = isCmd(todo)
+    ? `<pre class="ni__cmd"><code>${esc(todo.replace(/^\$\s*/, ""))}</code></pre>`
+    : `<p class="ni__do-text">${esc(todo)}</p>`;
+  const points = (it.points || []).map((p) => `<li>${esc(p)}</li>`).join("");
+  const src = SRC_LABEL[it.source] || esc(it.source || "");
+  const score = Number.isFinite(+it.score) ? `${+it.score}/10` : "";
+  return `<article class="ni">
+  <header class="ni__h">
+    <span class="ni__n">${num}</span>
+    <a class="ni__t" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)} <span class="ni__arrow">↗</span></a>
+    ${score ? `<span class="ni__score">${score}</span>` : ""}
+  </header>
+  <p class="ni__body">${esc(it.body)}</p>
+  ${points ? `<ul class="ni__pts">${points}</ul>` : ""}
+  <div class="ni__meta">
+    <div class="ni__row"><dt>얻는 것</dt><dd>${esc(it.gain)}</dd></div>
+    <div class="ni__row ni__row--do"><dt>지금 할 일</dt><dd>${todoHtml}</dd></div>
+    <div class="ni__row ni__row--why"><dt>왜 지금</dt><dd>${esc(it.why_now)}</dd></div>
+  </div>
+  <footer class="ni__f"><span class="ni__src">${src}</span><a class="ni__story" href="${esc(it.url)}" target="_blank" rel="noopener">스토리 →</a></footer>
+</article>`;
 }
 
-const trending = (resultJson.trending_picks || []).map(renderTrending).join("\n\n");
-const core = (resultJson.core_picks || []).map(renderCore).join("\n\n---\n\n");
-const sub = (resultJson.sub_picks || []).map(renderSub).join("\n\n");
+let bodyHtml = "";
+let total = 0;
+for (const [key, label] of SECTIONS) {
+  const secItems = items.filter((it) => it.section === key);
+  if (!secItems.length) continue;
+  total += secItems.length;
+  bodyHtml += `<section class="news-sec">\n<h2 class="news-sec__t">${label}</h2>\n${secItems.map(renderItem).join("\n")}\n</section>\n`;
+}
+// 미분류(섹션값 이상) 항목은 헤드라인 아래 묶기
+const orphans = items.filter((it) => !SECTIONS.some(([k]) => k === it.section));
+if (orphans.length) {
+  bodyHtml += `<section class="news-sec">\n<h2 class="news-sec__t">그 외</h2>\n${orphans.map(renderItem).join("\n")}\n</section>\n`;
+  total += orphans.length;
+}
 
+const note = String(data.edition_note || "").replaceAll('"', "'").trim();
 const md = `---
 title: ${dateStr} (${dayOfWeek})
-eyebrow: 큐레이션 회차
-hero_title: "${heroDate} <em>(${dayOfWeek})</em>"
-description: "${(resultJson.description || "").replaceAll('"', "'")}"
-summary: ${(resultJson.description || "").replaceAll('"', "'")}
+eyebrow: AI · DEV DAILY
+hero_title: "${dateStr.replaceAll("-", " · ")} <em>(${dayOfWeek})</em>"
+description: "${note}"
+summary: ${note}
 ---
 
-## 이번 회차 흐름
-
-${resultJson.flow_summary || ""}
-
----
-
-## 🔥 오늘 핫한 것 (도메인 무관, 그냥 화제인 거)
-
-분위기 파악용 5개.
-
-${trending}
-
----
-
-## 코어 ★★★
-
-${core}
-
----
-
-## 서브 ★★
-
-${sub}
-
----
-
-## 메모
-
-${resultJson.memo || ""}
+<div class="news">
+${bodyHtml}</div>
 `;
 
 await writeFile(`${slug}.md`, md);
-console.log(
-  `${slug}.md 저장 (트렌딩 ${(resultJson.trending_picks || []).length} / 코어 ${
-    (resultJson.core_picks || []).length
-  } / 서브 ${(resultJson.sub_picks || []).length})`
-);
+console.log(`${slug}.md 저장 — 항목 ${total}개`);
 
-// index.md 회차 목록 재생성
-const files = (await readdir("."))
-  .filter((f) => /^\d{4}-\d{2}-\d{2}.*\.md$/.test(f))
-  .sort()
-  .reverse();
-
+// ===== index.md 재생성 =====
+const files = (await readdir(".")).filter((f) => /^\d{4}-\d{2}-\d{2}.*\.md$/.test(f)).sort().reverse();
 async function readSummaryOf(file) {
   try {
-    const raw = await readFile(file, "utf8");
-    const fm = raw.replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---/);
+    const fm = (await readFile(file, "utf8")).replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---/);
     if (!fm) return "";
-    const sumMatch = fm[1].match(/^summary:\s*(.+)$/m);
-    if (sumMatch) return sumMatch[1].trim();
-    const descMatch = fm[1].match(/^description:\s*"?(.+?)"?$/m);
-    return descMatch ? descMatch[1].trim() : "";
-  } catch {
-    return "";
-  }
+    const s = fm[1].match(/^summary:\s*(.+)$/m);
+    if (s) return s[1].trim();
+    const d = fm[1].match(/^description:\s*"?(.+?)"?$/m);
+    return d ? d[1].trim() : "";
+  } catch { return ""; }
 }
-
-const entries = await Promise.all(
-  files.map(async (f) => {
-    const slugOnly = f.replace(".md", "");
-    const summary = await readSummaryOf(f);
-    const mm = slugOnly.match(/^(\d{4}-\d{2}-\d{2})_(.+)$/);
-    const label = mm ? `${mm[1]} (${mm[2]})` : slugOnly;
-    return summary
-      ? `- [${label} — ${summary}](${slugOnly}.html)`
-      : `- [${label}](${slugOnly}.html)`;
-  })
-);
+const entries = await Promise.all(files.map(async (f) => {
+  const slugOnly = f.replace(".md", "");
+  const summary = await readSummaryOf(f);
+  const mm = slugOnly.match(/^(\d{4}-\d{2}-\d{2})_(.+)$/);
+  const label = mm ? `${mm[1]} (${mm[2]})` : slugOnly;
+  return summary ? `- [${label} — ${summary}](${slugOnly}.html)` : `- [${label}](${slugOnly}.html)`;
+}));
 
 const indexMd = `---
 title: AI Trends
 eyebrow: AI × DEV · DAILY
 hero_title: "AI <em>Trends</em>"
-description: 매일 아침, GitHub·Hacker News·arXiv·HuggingFace·Reddit에서 그날의 AI·개발 트렌드를 자동으로 모아 한국어로 정리합니다. URL 하나 복사해 AI 코딩 도구에 넣으면 바로 작업이 시작되는 자료 위주.
+description: 매일 아침, GitHub·Hacker News·arXiv·HuggingFace·Reddit에서 그날의 AI·개발 트렌드를 자동으로 모아 한국어로 정리합니다. 항목마다 '얻는 것 · 지금 할 일 · 왜 지금'으로 바로 써먹게.
 stats:
   - num: "매일"
     lbl: "Daily Update"
   - num: "${sources.length}"
     lbl: "Sources"
-  - num: "10+"
-    lbl: "Items / Day"
+  - num: "6"
+    lbl: "Sections"
   - num: "${files.length}"
     lbl: "회차"
 ---
@@ -450,20 +350,15 @@ ${entries.join("\n")}
 
 *매일 08:00 KST 새 회차가 자동으로 추가됩니다.*
 
-## 각 회차에는
+## 각 회차 구성
 
-- 🔥 **오늘 핫한 것** 5개 — 도메인 무관, 그냥 화제인 것
-- ★★★ **코어** 3~5개 — 받아서 바로 써먹을 진짜배기
-- ★★ **서브** 5~8개 — 알아두면 좋은 인접 기술
-- *흐름 메모* — 큰 흐름 2~3줄
+- **오늘의 헤드라인** — 출처 무관, 그날의 톱 4~6
+- **릴리스 · 신모델 / 핫 레포 / 주목할 페이퍼 / 개발 툴 / 커뮤니티 반응**
+- 항목마다 *얻는 것 · 지금 할 일 · 왜 지금* + 실무 점수
 
 ## 이 큐레이션은
 
-매일 아침, **GitHub Trending · Hacker News · arXiv · HuggingFace · Reddit** 을 자동으로 돌며
-그날 새로 나온 것 중 실제로 써먹을 수 있는 것만 골라 정리합니다.
-Claude Code 구독으로 로컬에서 생성하므로 별도 API 비용이 없습니다.
-
-기준은 단순합니다 — **"이 URL을 AI 코딩 도구에 붙여 넣으면 바로 작업이 시작되는가?"**
+매일 아침 **GitHub · Hacker News · arXiv · HuggingFace · Reddit** 을 자동으로 돌며 그날 새로 나온 것 중 실제로 써먹을 수 있는 것만 골라 정리합니다. Claude Code 구독으로 로컬 생성하므로 별도 API 비용이 없습니다.
 `;
 
 await writeFile("index.md", indexMd);
