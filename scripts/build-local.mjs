@@ -213,6 +213,8 @@ ${SPEC}
 
 → 해요체/합니다체 섞어 간결하게. 과장·영업체 금지. '얻는 것'은 독자 이득, '지금 할 일'은 즉시 실행 가능한 구체 행동(가능하면 명령어), '왜 지금'은 타이밍·의미.
 
+**누구나 이해하게 (가장 중요):** 비전공자·입문자도 읽게 쓰세요. 모든 기술용어·약어는 처음 나올 때 괄호로 쉽게 풀이(예: "MoE(여러 전문가 모델 중 일부만 골라 쓰는 구조)", "추론(AI가 답을 만들어내는 과정)"). 아는 것에 빗대기(엑셀·USB·메모장·번역기 등). 영어 원문 제목은 한국어 제목으로 바꾸고 필요하면 원어 병기. 어려우면 한 번 더 풀어 설명.
+
 # 수집된 소스 (${okSources.length}개)
 ${okSources.map((f) => `### ${f.name}\n${f.text}`).join("\n\n---\n\n")}
 
@@ -223,6 +225,8 @@ ${[...priorUrls].slice(0, 50).map((u) => `- ${u}`).join("\n") || "(없음)"}
 \`\`\`
 {
   "edition_note": "오늘 호 한 줄 소개 (~90자) — 무엇이 화제였는지",
+  "intro": "독자에게 건네는 인사 — 반드시 '안녕하세요!'로 시작. 오늘 뭐가 눈에 띄는지 2~3가지를 친근하게 짚고 기대감으로 마무리. 3~4문장. 전문용어 최소화.",
+  "outro": "맺음말/감상 — 오늘 흐름을 한 발 물러나 본 소회. 큐레이터의 솔직한 감상·전망 2~3문장. 따뜻하게 마무리.",
   "items": [
     {
       "section": "headline | release | repo | gov | paper | tool | community",
@@ -331,6 +335,8 @@ if (orphans.length) {
 }
 
 const note = String(data.edition_note || "").replaceAll('"', "'").trim();
+const introHtml = data.intro ? `<div class="news-intro"><p>${esc(data.intro)}</p></div>\n` : "";
+const outroHtml = data.outro ? `<div class="news-outro"><span class="news-outro__t">맺음말</span><p>${esc(data.outro)}</p></div>\n` : "";
 const md = `---
 title: ${dateStr} (${dayOfWeek})
 eyebrow: AI · DEV DAILY
@@ -340,7 +346,7 @@ summary: ${note}
 ---
 
 <div class="news">
-${bodyHtml}</div>
+${introHtml}${bodyHtml}${outroHtml}</div>
 `;
 
 await writeFile(`${slug}.md`, md);

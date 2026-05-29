@@ -16,7 +16,7 @@ stats:
 
 ## 회차 목록
 
-- [2026-05-30 (토) — Liquid LFM2.5-8B-A1B MoE 공개, Anthropic 런레이트 470억 달러, Claude Opus 4.8 출시 — 모델·돈·도구 다 움직인 주말.](2026-05-30_토.html)
+- [2026-05-30 (토) — Claude Opus 4.8 출시, Liquid AI 8B MoE 공개, LangGraph·LangChain 잇따른 업데이트가 주말을 달군 토요일.](2026-05-30_토.html)
 {:.episode-list}
 
 *매일 08:00 KST 새 회차가 자동으로 추가됩니다.*
