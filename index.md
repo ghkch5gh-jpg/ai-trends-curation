@@ -10,12 +10,13 @@ stats:
     lbl: "Sources"
   - num: "6"
     lbl: "Sections"
-  - num: "1"
+  - num: "2"
     lbl: "회차"
 ---
 
 ## 회차 목록
 
+- [2026-05-31 (일) — 작은 모델 러시·Claude Opus 4.8·OpenRouter 시리즈B — 인프라와 피로감이 같이 커지는 일요일](2026-05-31_일.html)
 - [2026-05-30 (토) — 작은 모델이 쏟아진 토요일 — Liquid AI 8B-A1B 공개, Claude Opus 4.8 출시, MCP 회의론까지](2026-05-30_토.html)
 {:.episode-list}
 
