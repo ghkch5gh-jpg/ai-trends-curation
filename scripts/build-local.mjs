@@ -234,7 +234,7 @@ ${[...priorUrls].slice(0, 50).map((u) => `- ${u}`).join("\n") || "(없음)"}
       "url": "원본 링크 (수집된 것 중에서만)",
       "source": "출처태그: hn | github | huggingface | arxiv | reddit | blog",
       "score": 1-10 정수 (실무 임팩트),
-      "body": "본문 2~4문장 — 무슨 일이고 핵심이 뭔지",
+      "body": "본문 정확히 3~4문장 (분량 통일 — 너무 짧거나 길지 않게) — 무슨 일이고 핵심이 뭔지",
       "points": ["핵심 요점 1", "2", "3"],
       "gain": "얻는 것 — 독자가 뭘 얻는지 1~2문장",
       "todo": "지금 할 일 — 즉시 행동/명령 (예: pip install …, git clone …)",
@@ -326,7 +326,7 @@ function renderItem(it) {
   <header class="ni__h">
     <span class="ni__n">${num}</span>
     <a class="ni__t" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)} <span class="ni__arrow">↗</span></a>
-    ${score ? `<span class="ni__score">${score}</span>` : ""}
+    <span class="ni__tr">${src ? `<span class="ni__src">${src}</span>` : ""}${score ? `<span class="ni__score">${score}</span>` : ""}</span>
   </header>
   <p class="ni__body">${inlineEsc(it.body)}</p>
   ${points ? `<ul class="ni__pts">${points}</ul>` : ""}
@@ -335,7 +335,7 @@ function renderItem(it) {
     <div class="ni__row ni__row--do"><dt>지금 할 일</dt><dd>${todoHtml}</dd></div>
     <div class="ni__row ni__row--why"><dt>왜 지금</dt><dd>${inlineEsc(it.why_now)}</dd></div>
   </div>
-  <footer class="ni__f"><span class="ni__src">${src}</span><a class="ni__story" href="${esc(it.url)}" target="_blank" rel="noopener">스토리 →</a></footer>
+  <footer class="ni__f"><a class="ni__story" href="${esc(it.url)}" target="_blank" rel="noopener">스토리 →</a></footer>
 </article>`;
 }
 
