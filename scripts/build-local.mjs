@@ -225,7 +225,7 @@ ${[...priorUrls].slice(0, 50).map((u) => `- ${u}`).join("\n") || "(없음)"}
 \`\`\`
 {
   "edition_note": "오늘 호 한 줄 소개 (~90자) — 무엇이 화제였는지",
-  "intro": "독자에게 건네는 인사 — 반드시 '안녕하세요!'로 시작. 오늘 핵심 1~2가지만 아주 쉽고 간단하게 짚기. 2~3문장, 3줄 이내로 짧게. 전문용어 거의 쓰지 말고 풀어쓸 것.",
+  "intro": "이번 회차 흐름 — 오늘 AI·개발 분야의 큰 그림을 4~6문장으로 분석적으로 정리. 인사말 쓰지 말 것. 무엇이 화제였고 어떤 방향으로 흐르는지 쉬운 말로.",
   "outro": "맺음말/감상 — 오늘 흐름을 한 발 물러나 본 소회. 큐레이터의 솔직한 감상·전망 2~3문장. 따뜻하게 마무리.",
   "items": [
     {
@@ -355,7 +355,7 @@ if (orphans.length) {
 }
 
 const note = String(data.edition_note || "").replaceAll('"', "'").trim();
-const introHtml = data.intro ? `<div class="news-intro"><p>${inlineEsc(data.intro)}</p></div>\n` : "";
+const introHtml = data.intro ? `<section class="news-flow-sec"><h2 class="news-flow__t">이번 회차 흐름</h2><div class="news-flow"><p>${inlineEsc(data.intro)}</p></div></section>\n` : "";
 const outroHtml = data.outro ? `<div class="news-outro"><span class="news-outro__t">맺음말</span><p>${inlineEsc(data.outro)}</p></div>\n` : "";
 const md = `---
 title: ${dateStr} (${dayOfWeek})
