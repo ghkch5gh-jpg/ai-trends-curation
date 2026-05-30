@@ -276,6 +276,66 @@ if (!jm) { console.error("JSON 미발견:", raw.slice(0, 600)); process.exit(1);
 let data;
 try { data = JSON.parse(jm[1] ?? jm[0]); } catch (e) { console.error("파싱 실패:", e.message, "\n", raw.slice(0, 600)); process.exit(1); }
 
+// ===== 가벼운 검증: 선택 항목의 원문을 실제로 fetch 해서 요약을 대조·정정 =====
+// (1차 선정은 제목·스니펫 기반이라 본문 환각 위험 → 원문과 1회 대조)
+async function verifyItems(items) {
+  if (!items.length) return items;
+  console.log(`검증: ${items.length}개 항목 원문 fetch...`);
+  const withSrc = await Promise.all(items.map(async (it) => {
+    if (!/^https?:\/\//.test(it.url || "")) return { it, src: "" };
+    try {
+      const res = await fetchWithRetry(it.url, { attempts: 2, baseDelayMs: 500 });
+      const ct = res.headers.get("content-type") || "";
+      if (!/text|html|json|xml/i.test(ct)) return { it, src: "" };
+      return { it, src: stripHtml(await res.text(), it.url).slice(0, 2200) };
+    } catch { return { it, src: "" }; }
+  }));
+  const fetched = withSrc.filter((x) => x.src).length;
+  console.log(`  원문 확보: ${fetched}/${items.length}`);
+  if (!fetched) return items.map((it) => ({ ...it, verified: false }));
+
+  const payload = withSrc.map((x, i) => ({
+    idx: i, title: x.it.title, body: x.it.body, gain: x.it.gain, todo: x.it.todo,
+    source_excerpt: x.src || "(원문 못 가져옴)",
+  }));
+  const vPrompt = `**채팅 응답. 도구·검색 금지. 응답은 JSON 배열 하나만, 첫 글자 [ 로 시작.**
+당신은 팩트체커입니다. 각 항목은 [작성된 요약(body/gain/todo)] + [원문 발췌(source_excerpt)]. 원문에 비춰:
+- 원문에 근거하면 그대로(작은 표현만 다듬기), 원문에 없는 사실·과장·환각(버전/수치/기능 오류 등)은 원문 기준으로 정정.
+- source_excerpt 가 "(원문 못 가져옴)" 이면 검증 불가 → 손대지 말고 verified=false.
+- 한국어·기존 말투 유지.
+각 항목 반환: { "idx": 정수, "body": "...", "gain": "...", "todo": "...", "verified": true/false, "note": "정정했으면 한 줄, 없으면 빈 문자열" }
+
+# 항목
+${JSON.stringify(payload)}
+
+# 출력 (JSON 배열만)`;
+  let vraw;
+  try { vraw = await callClaude(vPrompt); }
+  catch (e) { console.warn(`검증 호출 실패: ${e.message} — 원본 유지`); return items.map((it) => ({ ...it, verified: false })); }
+  const vm = vraw.match(/```json\s*([\s\S]*?)\s*```/) || vraw.match(/\[[\s\S]*\]/);
+  if (!vm) { console.warn("검증 JSON 미발견 — 원본 유지"); return items.map((it) => ({ ...it, verified: false })); }
+  let verdicts;
+  try { verdicts = JSON.parse(vm[1] ?? vm[0]); } catch { console.warn("검증 파싱 실패 — 원본 유지"); return items.map((it) => ({ ...it, verified: false })); }
+  const byIdx = new Map(verdicts.map((v) => [v.idx, v]));
+  let okCount = 0, fixCount = 0;
+  const out = items.map((it, i) => {
+    const v = byIdx.get(i);
+    if (!v) return { ...it, verified: false };
+    if (v.body && v.body !== it.body) fixCount++;
+    if (v.verified) okCount++;
+    return {
+      ...it,
+      body: v.body || it.body,
+      gain: v.gain || it.gain,
+      todo: v.todo || it.todo,
+      verified: !!v.verified,
+    };
+  });
+  console.log(`  검증 완료: 대조통과 ${okCount} · 정정 ${fixCount}`);
+  return out;
+}
+data.items = await verifyItems(Array.isArray(data.items) ? data.items : []);
+
 // ===== 시맨틱 HTML 렌더 (baeksang 레이아웃) =====
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const SECTIONS = [
@@ -335,7 +395,7 @@ function renderItem(it) {
     <div class="ni__row ni__row--do"><dt>지금 할 일</dt><dd>${todoHtml}</dd></div>
     <div class="ni__row ni__row--why"><dt>왜 지금</dt><dd>${inlineEsc(it.why_now)}</dd></div>
   </div>
-  <footer class="ni__f"><a class="ni__story" href="${esc(it.url)}" target="_blank" rel="noopener">스토리 →</a></footer>
+  <footer class="ni__f"><span class="ni__verified">${it.verified ? "✓ 원문 대조" : ""}</span><a class="ni__story" href="${esc(it.url)}" target="_blank" rel="noopener">스토리 →</a></footer>
 </article>`;
 }
 
