@@ -289,6 +289,26 @@ const SECTIONS = [
 ];
 const SRC_LABEL = { hn: "Hacker News", github: "GitHub", huggingface: "HuggingFace", arxiv: "arXiv", reddit: "Reddit", blog: "Blog" };
 const isCmd = (s) => /(^\$|pip install|npm |npx |git clone|brew |docker|curl |uv |cargo |huggingface-cli|conda )/i.test(String(s || "").trim());
+// 한글이 섞여 있으면 '명령어로 시작하는 산문' — 터미널 블록(white-space:pre)에 넣으면 가로 오버플로.
+// 순수 명령어(한글 0)만 $ 블록으로, 나머지는 산문으로 두고 명령어 토큰만 인라인 <code>로 강조한다.
+const HANGUL = /[가-힣]/;
+const isPureCmd = (s) => isCmd(s) && !HANGUL.test(s.replace(/^\$\s*/, ""));
+const CMD_TOKENS = "pipx|pip|npm|npx|pnpm|yarn|git|brew|docker|curl|wget|uvx|uv|cargo|conda|ollama|huggingface-cli|python3|python|node";
+const CMD_RUN_RE = new RegExp(`(^|\\s)((?:${CMD_TOKENS})(?=\\s|$)[^\\uAC00-\\uD7A3\\n]*)`, "g");
+// esc() 처리된 산문에서 명령어 토큰부터 한글 직전까지를 <code>로 감싼다.
+const highlightCmds = (escaped) =>
+  escaped.replace(CMD_RUN_RE, (_m, lead, run) => {
+    const trail = run.match(/\s*$/)[0]; // 뒤따르는 공백은 <code> 밖으로 (조사 앞 띄어쓰기 보존)
+    return `${lead}<code class="ni__code">${run.slice(0, run.length - trail.length)}</code>${trail}`;
+  });
+// .news 는 raw HTML 블록 — marked 가 내부 마크다운(백틱·볼드)을 처리하지 않으므로 여기서 직접 변환.
+const codeSpans = (escaped) =>
+  escaped
+    .replace(/`([^`\n]+)`/g, (_m, c) => `<code class="ni__code">${c}</code>`)
+    .replace(/\*\*([^*\n]+)\*\*/g, (_m, b) => `<strong>${b}</strong>`);
+const inlineEsc = (s) => codeSpans(esc(s));                    // 백틱/볼드 → 인라인 (모든 산문)
+const todoProse = (s) => highlightCmds(codeSpans(esc(s)));     // todo: 백틱 없는 맨명령어도 칩으로
+const stripBackticks = (s) => s.replace(/`/g, "");
 
 const items = Array.isArray(data.items) ? data.items : [];
 let n = 0;
@@ -296,10 +316,10 @@ function renderItem(it) {
   n += 1;
   const num = String(n).padStart(2, "0");
   const todo = String(it.todo || "").trim();
-  const todoHtml = isCmd(todo)
-    ? `<pre class="ni__cmd"><code>${esc(todo.replace(/^\$\s*/, ""))}</code></pre>`
-    : `<p class="ni__do-text">${esc(todo)}</p>`;
-  const points = (it.points || []).map((p) => `<li>${esc(p)}</li>`).join("");
+  const todoHtml = isPureCmd(todo)
+    ? `<pre class="ni__cmd"><code>${esc(stripBackticks(todo).replace(/^\$\s*/, ""))}</code></pre>`
+    : `<p class="ni__do-text">${todoProse(todo)}</p>`;
+  const points = (it.points || []).map((p) => `<li>${inlineEsc(p)}</li>`).join("");
   const src = SRC_LABEL[it.source] || esc(it.source || "");
   const score = Number.isFinite(+it.score) ? `${+it.score}/10` : "";
   return `<article class="ni">
@@ -308,12 +328,12 @@ function renderItem(it) {
     <a class="ni__t" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)} <span class="ni__arrow">↗</span></a>
     ${score ? `<span class="ni__score">${score}</span>` : ""}
   </header>
-  <p class="ni__body">${esc(it.body)}</p>
+  <p class="ni__body">${inlineEsc(it.body)}</p>
   ${points ? `<ul class="ni__pts">${points}</ul>` : ""}
   <div class="ni__meta">
-    <div class="ni__row"><dt>얻는 것</dt><dd>${esc(it.gain)}</dd></div>
+    <div class="ni__row"><dt>얻는 것</dt><dd>${inlineEsc(it.gain)}</dd></div>
     <div class="ni__row ni__row--do"><dt>지금 할 일</dt><dd>${todoHtml}</dd></div>
-    <div class="ni__row ni__row--why"><dt>왜 지금</dt><dd>${esc(it.why_now)}</dd></div>
+    <div class="ni__row ni__row--why"><dt>왜 지금</dt><dd>${inlineEsc(it.why_now)}</dd></div>
   </div>
   <footer class="ni__f"><span class="ni__src">${src}</span><a class="ni__story" href="${esc(it.url)}" target="_blank" rel="noopener">스토리 →</a></footer>
 </article>`;
@@ -335,8 +355,8 @@ if (orphans.length) {
 }
 
 const note = String(data.edition_note || "").replaceAll('"', "'").trim();
-const introHtml = data.intro ? `<div class="news-intro"><p>${esc(data.intro)}</p></div>\n` : "";
-const outroHtml = data.outro ? `<div class="news-outro"><span class="news-outro__t">맺음말</span><p>${esc(data.outro)}</p></div>\n` : "";
+const introHtml = data.intro ? `<div class="news-intro"><p>${inlineEsc(data.intro)}</p></div>\n` : "";
+const outroHtml = data.outro ? `<div class="news-outro"><span class="news-outro__t">맺음말</span><p>${inlineEsc(data.outro)}</p></div>\n` : "";
 const md = `---
 title: ${dateStr} (${dayOfWeek})
 eyebrow: AI · DEV DAILY

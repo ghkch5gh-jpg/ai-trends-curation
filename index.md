@@ -16,7 +16,7 @@ stats:
 
 ## 회차 목록
 
-- [2026-05-30 (토) — Claude Opus 4.8 출시, Liquid AI 8B MoE 공개, LangGraph·LangChain 잇따른 업데이트가 주말을 달군 토요일.](2026-05-30_토.html)
+- [2026-05-30 (토) — Claude Opus 4.8·Gemini 3.5·LFM2.5 MoE 등 신모델 러시, AI 피로감 담론도 한 켠에서 뜨겁네요.](2026-05-30_토.html)
 {:.episode-list}
 
 *매일 08:00 KST 새 회차가 자동으로 추가됩니다.*
