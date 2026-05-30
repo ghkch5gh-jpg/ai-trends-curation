@@ -322,7 +322,7 @@ function renderItem(it) {
   const points = (it.points || []).map((p) => `<li>${inlineEsc(p)}</li>`).join("");
   const src = SRC_LABEL[it.source] || esc(it.source || "");
   const score = Number.isFinite(+it.score) ? `${+it.score}/10` : "";
-  return `<article class="ni">
+  return `<article class="ni reveal">
   <header class="ni__h">
     <span class="ni__n">${num}</span>
     <a class="ni__t" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)} <span class="ni__arrow">↗</span></a>
@@ -355,7 +355,7 @@ if (orphans.length) {
 }
 
 const note = String(data.edition_note || "").replaceAll('"', "'").trim();
-const introHtml = data.intro ? `<section class="news-flow-sec"><h2 class="news-flow__t">이번 회차 흐름</h2><div class="news-flow"><p>${inlineEsc(data.intro)}</p></div></section>\n` : "";
+const introHtml = data.intro ? `<section class="news-flow-sec reveal"><h2 class="news-flow__t">이번 회차 흐름</h2><div class="news-flow"><p>${inlineEsc(data.intro)}</p></div></section>\n` : "";
 const outroHtml = data.outro ? `<div class="news-outro"><span class="news-outro__t">맺음말</span><p>${inlineEsc(data.outro)}</p></div>\n` : "";
 const md = `---
 title: ${dateStr} (${dayOfWeek})
