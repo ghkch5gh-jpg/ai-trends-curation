@@ -10,12 +10,13 @@ stats:
     lbl: "Sources"
   - num: "6"
     lbl: "Sections"
-  - num: "4"
+  - num: "5"
     lbl: "회차"
 ---
 
 ## 회차 목록
 
+- [2026-06-03 (수) — Microsoft가 MAI 자체 모델 두 종을 한꺼번에 공개, OpenAI Codex는 모두를 위한 도구로 확장](2026-06-03_수.html)
 - [2026-06-02 (화) — Anthropic S-1 제출, Claude Opus 4.8, Meta AI 인스타 탈취 사건 — 빅테크 뉴스가 쏟아진 화요일](2026-06-02_화.html)
 - [2026-06-01 (월) — Liquid LFM2.5 MoE, Claude Opus 4.8 후속 담론, 그리고 AI 피로감 — 작은 모델과 큰 한숨이 같이 온 월요일.](2026-06-01_월.html)
 - [2026-05-31 (일) — 작은 모델 러시·Claude Opus 4.8·OpenRouter 시리즈B — 인프라와 피로감이 같이 커지는 일요일](2026-05-31_일.html)
