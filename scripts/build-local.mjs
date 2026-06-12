@@ -281,8 +281,11 @@ try { data = JSON.parse(jm[1] ?? jm[0]); } catch (e) { console.error("파싱 실
 // ===== 중복 하드필터 — 프롬프트가 놓친 재등장 항목은 여기서 탈락 =====
 {
   const items0 = Array.isArray(data.items) ? data.items : [];
+  const seenToday = new Set();
   data.items = items0.filter((it) => {
-    if (priorUrls.has(normUrl(it.url))) { console.warn(`  중복 탈락: ${it.title} (${it.url})`); return false; }
+    const u = normUrl(it.url);
+    if (priorUrls.has(u) || seenToday.has(u)) { console.warn(`  중복 탈락: ${it.title} (${it.url})`); return false; }
+    seenToday.add(u);
     return true;
   });
   if (data.items.length < items0.length) console.log(`중복 필터: ${items0.length - data.items.length}개 제외`);
