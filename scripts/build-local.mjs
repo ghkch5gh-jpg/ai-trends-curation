@@ -181,11 +181,13 @@ if (okSources.length === 0) {
   process.exit(1);
 }
 
+const normUrl = (u) => String(u || "").replace(/[?#].*$/, "").replace(/\/+$/, "").toLowerCase();
 const allMd = (await readdir(".")).filter((f) => /^\d{4}-\d{2}-\d{2}.*\.md$/.test(f) && f !== `${slug}.md`);
-const priorFiles = allMd.sort().reverse().slice(0, 2);
+// 최근 10회차 아이템 URL — 직전 2회차만 보던 옛 방식은 같은 repo·모델이 3일 주기로 재등장했음.
+const DUP_WINDOW = 10;
 const priorUrls = new Set();
-for (const f of priorFiles) {
-  for (const m of (await readFile(f, "utf8")).matchAll(/href="(https?:\/\/[^"]+)"/g)) priorUrls.add(m[1]);
+for (const f of allMd.sort().reverse().slice(0, DUP_WINDOW)) {
+  for (const m of (await readFile(f, "utf8")).matchAll(/class="ni__t" href="(https?:\/\/[^"]+)"/g)) priorUrls.add(normUrl(m[1]));
 }
 
 const SPEC = await readFile("CURATION_SPEC.md", "utf8");
@@ -218,8 +220,8 @@ ${SPEC}
 # 수집된 소스 (${okSources.length}개)
 ${okSources.map((f) => `### ${f.name}\n${f.text}`).join("\n\n---\n\n")}
 
-# 직전 회차 URL (중복 금지)
-${[...priorUrls].slice(0, 50).map((u) => `- ${u}`).join("\n") || "(없음)"}
+# 최근 ${DUP_WINDOW}회차에 이미 다룬 URL (중복 금지 — 이 목록의 repo·모델·글은 오늘 다시 다루지 말 것. 차라리 항목 수를 줄일 것)
+${[...priorUrls].slice(0, 150).map((u) => `- ${u}`).join("\n") || "(없음)"}
 
 # 출력 스키마 (이대로만)
 \`\`\`
@@ -275,6 +277,16 @@ const jm = raw.match(/```json\s*([\s\S]*?)\s*```/) || raw.match(/\{[\s\S]*\}/);
 if (!jm) { console.error("JSON 미발견:", raw.slice(0, 600)); process.exit(1); }
 let data;
 try { data = JSON.parse(jm[1] ?? jm[0]); } catch (e) { console.error("파싱 실패:", e.message, "\n", raw.slice(0, 600)); process.exit(1); }
+
+// ===== 중복 하드필터 — 프롬프트가 놓친 재등장 항목은 여기서 탈락 =====
+{
+  const items0 = Array.isArray(data.items) ? data.items : [];
+  data.items = items0.filter((it) => {
+    if (priorUrls.has(normUrl(it.url))) { console.warn(`  중복 탈락: ${it.title} (${it.url})`); return false; }
+    return true;
+  });
+  if (data.items.length < items0.length) console.log(`중복 필터: ${items0.length - data.items.length}개 제외`);
+}
 
 // ===== 가벼운 검증: 선택 항목의 원문을 실제로 fetch 해서 요약을 대조·정정 =====
 // (1차 선정은 제목·스니펫 기반이라 본문 환각 위험 → 원문과 1회 대조)
