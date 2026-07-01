@@ -10,12 +10,13 @@ stats:
     lbl: "Sources"
   - num: "6"
     lbl: "Sections"
-  - num: "33"
+  - num: "34"
     lbl: "회차"
 ---
 
 ## 회차 목록
 
+- [2026-07-02 (목) — GLM 팀의 'ZCode'로 Claude Code 대항마가 등장했고, 오픈소스 3D 물리엔진 Box3D와 작은 OCR 모델들이 화제였어요.](2026-07-02_목.html)
 - [2026-07-01 (수) — Claude Sonnet 5 출시·Claude Code 숨은 표식 논란·Claude Science·나노바나나2 Lite까지, 온통 새 모델로 들썩인 하루.](2026-07-01_수.html)
 - [2026-06-30 (화) — 오픈소스 에이전트 코딩 모델 Ornith-1.0이 종일 화제 — 로컬에서 돌리는 똑똑한 코딩 모델이 주인공인 날](2026-06-30_화.html)
 - [2026-06-29 (월) — Claude Code로 MRI 2차 소견을 받은 글이 화제, GLM 5.2가 보안 벤치마크에서 Claude를 앞섰고, 작은 한국어 데이터셋도 등장한 날](2026-06-29_월.html)
