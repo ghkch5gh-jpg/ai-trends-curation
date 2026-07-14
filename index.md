@@ -10,12 +10,13 @@ stats:
     lbl: "Sources"
   - num: "6"
     lbl: "Sections"
-  - num: "41"
+  - num: "42"
     lbl: "회차"
 ---
 
 ## 회차 목록
 
+- [2026-07-15 (수) — 로컬 AI 실행 도구의 연속 업데이트와 코딩 에이전트 보안·사고력 논쟁이 동시에 달아오른 날입니다.](2026-07-15_수.html)
 - [2026-07-09 (목) — TypeScript 7 정식 출시와 GPT-Live·Grok 4.5·SWE-1.7이 한꺼번에 쏟아진, 도구·모델 풍년의 하루.](2026-07-09_목.html)
 - [2026-07-08 (수) — sqlite-utils 4.0가 DB 스키마 마이그레이션을 품고 나왔고, Gemini API가 백그라운드 에이전트를 열었으며, EU는 Chat Control을 되살렸습니다.](2026-07-08_수.html)
 - [2026-07-07 (화) — Anthropic가 모델 속 '공용 작업공간'을 파헤쳤고, GLM-5.2 대형 공개 모델과 로봇 라이브러리 LeRobot 0.6이 화제였던 날.](2026-07-07_화.html)
@@ -69,4 +70,4 @@ stats:
 
 ## 이 큐레이션은
 
-매일 아침 **GitHub · Hacker News · arXiv · HuggingFace · Reddit** 을 자동으로 돌며 그날 새로 나온 것 중 실제로 써먹을 수 있는 것만 골라 정리합니다. Claude Code 구독으로 로컬 생성하므로 별도 API 비용이 없습니다.
+매일 아침 **GitHub · Hacker News · arXiv · HuggingFace · Reddit** 을 자동으로 돌며 그날 새로 나온 것 중 실제로 써먹을 수 있는 것만 골라 정리합니다. Codex 구독으로 로컬 생성하므로 별도 API 비용이 없습니다.

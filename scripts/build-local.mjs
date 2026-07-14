@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// 로컬 생성기 — 수집 → claude -p (정액제) → 회차 .md(시맨틱 HTML) → index.md.
+// 로컬 생성기 — 수집 → codex exec (구독 인증) → 회차 .md(시맨틱 HTML) → index.md.
 // 레이아웃·말투는 baeksang.dev/daily 식: 주제 섹션 + 항목마다 얻는 것/지금 할 일/왜 지금/점수/출처.
-//   DRY_RUN=1 : 수집+프롬프트만   FORCE=1 : 오늘 회차 강제 재생성   CLAUDE_MODEL=opus
+//   DRY_RUN=1 : 수집+프롬프트만   FORCE=1 : 오늘 회차 강제 재생성
+//   CODEX_MODEL=<선택>   CODEX_REASONING_EFFORT=low|medium|high|xhigh
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 
 const DRY_RUN = process.env.DRY_RUN === "1";
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "sonnet";
+const CODEX_MODEL = process.env.CODEX_MODEL || "";
+const CODEX_REASONING_EFFORT = process.env.CODEX_REASONING_EFFORT || "medium";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 
 const sources = JSON.parse(await readFile("scripts/sources.json", "utf8"));
@@ -257,22 +259,24 @@ if (DRY_RUN) {
   process.exit(0);
 }
 
-function callClaude(promptText) {
+function callCodex(promptText) {
   return new Promise((resolve, reject) => {
-    const args = ["-p", "--output-format", "text", "--allowedTools", "", "--model", CLAUDE_MODEL];
-    console.log(`claude -p (${CLAUDE_MODEL}) 호출...`);
-    const child = spawn("claude", args, { stdio: ["pipe", "pipe", "inherit"], shell: true });
+    const args = ["exec", "--ephemeral", "--ignore-user-config", "--skip-git-repo-check", "--sandbox", "read-only", "-c", `model_reasoning_effort=${CODEX_REASONING_EFFORT}`];
+    if (CODEX_MODEL) args.push("--model", CODEX_MODEL);
+    args.push("-");
+    console.log(`codex exec (${CODEX_MODEL || "default"}, ${CODEX_REASONING_EFFORT}) 호출...`);
+    const child = spawn(process.platform === "win32" ? "codex.cmd" : "codex", args, { stdio: ["pipe", "pipe", "inherit"], shell: process.platform === "win32", windowsHide: true });
     let out = "";
     const timer = setTimeout(() => { child.kill(); reject(new Error("타임아웃 5분")); }, 5 * 60 * 1000);
     child.stdout.on("data", (d) => (out += d.toString()));
     child.on("error", (e) => { clearTimeout(timer); reject(e); });
-    child.on("close", (code) => { clearTimeout(timer); code === 0 ? resolve(out) : reject(new Error(`claude exit ${code}`)); });
+    child.on("close", (code) => { clearTimeout(timer); code === 0 ? resolve(out) : reject(new Error(`codex exit ${code}`)); });
     child.stdin.write(promptText);
     child.stdin.end();
   });
 }
 
-const raw = await callClaude(prompt);
+const raw = await callCodex(prompt);
 const jm = raw.match(/```json\s*([\s\S]*?)\s*```/) || raw.match(/\{[\s\S]*\}/);
 if (!jm) { console.error("JSON 미발견:", raw.slice(0, 600)); process.exit(1); }
 let data;
@@ -325,7 +329,7 @@ ${JSON.stringify(payload)}
 
 # 출력 (JSON 배열만)`;
   let vraw;
-  try { vraw = await callClaude(vPrompt); }
+  try { vraw = await callCodex(vPrompt); }
   catch (e) { console.warn(`검증 호출 실패: ${e.message} — 원본 유지`); return items.map((it) => ({ ...it, verified: false })); }
   const vm = vraw.match(/```json\s*([\s\S]*?)\s*```/) || vraw.match(/\[[\s\S]*\]/);
   if (!vm) { console.warn("검증 JSON 미발견 — 원본 유지"); return items.map((it) => ({ ...it, verified: false })); }
@@ -498,7 +502,7 @@ ${entries.join("\n")}
 
 ## 이 큐레이션은
 
-매일 아침 **GitHub · Hacker News · arXiv · HuggingFace · Reddit** 을 자동으로 돌며 그날 새로 나온 것 중 실제로 써먹을 수 있는 것만 골라 정리합니다. Claude Code 구독으로 로컬 생성하므로 별도 API 비용이 없습니다.
+매일 아침 **GitHub · Hacker News · arXiv · HuggingFace · Reddit** 을 자동으로 돌며 그날 새로 나온 것 중 실제로 써먹을 수 있는 것만 골라 정리합니다. Codex 구독으로 로컬 생성하므로 별도 API 비용이 없습니다.
 `;
 
 await writeFile("index.md", indexMd);
